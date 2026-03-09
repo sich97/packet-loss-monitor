@@ -1,0 +1,61 @@
+name: Rust CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: actions-rs/setup-rust@v0
+
+      - name: Run tests
+        run: cargo test --workspace
+
+  release:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Rust
+        uses: actions-rs/setup-rust@v0
+
+      - name: Build release
+        run: cargo build --release
+
+      - name: Create Release
+        uses: actions/create-release@v1
+        id: create_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.version.outputs.version }}
+          release_name: "Release ${{ steps.version.outputs.version }}"
+          draft: false
+          prerelease: false
+
+      - name: Upload Release Assets
+        uses: c-ak/matrix-convert-to-rows@v0.1.0
+        with:
+          from: column
+          to: lines
+        id: asset_paths
+        run: |
+          echo ${{ github.workspace }}/target/release/packet_loss_monitor
+
+      - name: Upload binary to release
+        uses: actions/upload-release-assets@v1.0
+        with:
+          release_id: ${{ steps.create_release.outputs.id }}
+          assets: ${{ steps.asset_paths.outputs.as_json }}
+          asset_content_type: application/octet-stream
+          asset_name: packet_loss_monitor-linux-amd64
+          asset_path: ${{ github.workspace }}/target/release/packet_loss_monitor
