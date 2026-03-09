@@ -8,7 +8,7 @@ struct Args {
     interface: String,
     interval: u64,
     target: String,
-    count: usize,
+    packets: usize,
 }
 
 impl Args {
@@ -37,11 +37,11 @@ impl Args {
                     .value_parser(clap::value_parser!(u64)),
             )
             .arg(
-                Arg::new("count")
+                Arg::new("packets")
                     .long("count")
                     .default_value("10")
                     .value_name("packets")
-                    .help("Packets to send per interval"),
+                    .help("Number of packets to send per interval"),
             )
             .get_matches();
 
@@ -49,7 +49,7 @@ impl Args {
             interface: matches.get_one::<String>("interface").unwrap().clone(),
             interval: matches.get_one::<u64>("interval").unwrap().clone(),
             target: matches.get_one::<String>("target").unwrap().clone(),
-            count: matches.get_one::<usize>("count").unwrap().clone(),
+            packets: matches.get_one::<usize>("count").unwrap().clone(),
         }
     }
 }
@@ -73,7 +73,7 @@ pub fn main() {
     );
     println!(
         "Target: {}, Interval: {}s, Packets per interval: {}",
-        args.target, args.interval, args.count
+        args.target, args.interval, args.packets
     );
     println!("Press Ctrl+C to stop...\n");
 
@@ -86,7 +86,7 @@ pub fn main() {
         let interface = args.interface.clone();
         let target = args.target.clone();
         let interval = args.interval;
-        let count = args.count;
+        let packets = args.packets;
         
         thread::spawn(move || {
             let interval = Duration::from_secs(interval);
@@ -98,7 +98,7 @@ pub fn main() {
                 
                 let output = std::process::Command::new("ping")
                     .arg("-c")
-                    .arg(count.to_string())
+                    .arg(packets.to_string())
                     .arg(target.clone())
                     .output();
                 
@@ -106,7 +106,7 @@ pub fn main() {
                     let packet_loss = parse_packet_loss(&output.stdout);
                     results.lock().unwrap().push(packet_loss);
                     
-                    let total_packets = count;
+                    let total_packets = packets;
                     let lost_packets = (total_packets as f64 * packet_loss / 100.0) as usize;
                     println!(
                         "Loss: {:.2}% ({} lost/{} sent)",
