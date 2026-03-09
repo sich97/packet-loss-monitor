@@ -1,5 +1,4 @@
-use clap::{ArgMatches, Command};
-use std::process::{Command, Stdio};
+use clap::{Arg, Command};
 use std::time::Duration;
 use std::thread;
 use std::sync::{Arc, Mutex};
@@ -14,40 +13,43 @@ struct Args {
 
 impl Args {
     fn parse() -> Self {
-        let matches = Command::version("packet_loss_monitor 0.1")
+        let matches = Command::new("packet_loss_monitor")
+            .version("0.1")
             .about("Lightweight packet loss monitoring tool")
             .arg(
-                clap::Arg::new("interface")
+                Arg::new("interface")
+                    .long("interface")
                     .required(true)
                     .help("Network interface to monitor"),
             )
             .arg(
-                clap::Arg::new("target")
+                Arg::new("target")
                     .long("target")
-                    .default("1.1.1.1")
+                    .default_value("1.1.1.1")
                     .help("Target IP for ping tests"),
             )
             .arg(
-                clap::Arg::new("interval")
+                Arg::new("interval")
                     .long("interval")
-                    .default(5)
+                    .default_value("5")
                     .value_name("seconds")
-                    .help("Monitoring interval in seconds"),
+                    .help("Monitoring interval in seconds")
+                    .value_parser(clap::value_parser!(u64)),
             )
             .arg(
-                clap::Arg::new("count")
+                Arg::new("count")
                     .long("count")
-                    .default(10)
+                    .default_value("10")
                     .value_name("packets")
                     .help("Packets to send per interval"),
             )
             .get_matches();
 
         Args {
-            interface: matches.get::<String>("interface").cloned().unwrap(),
-            interval: matches.get::<u64>("interval").unwrap(),
-            target: matches.get::<String>("target").cloned().unwrap(),
-            count: matches.get::<usize>("count").unwrap(),
+            interface: matches.get_one::<String>("interface").unwrap().clone(),
+            interval: matches.get_one::<u64>("interval").unwrap().clone(),
+            target: matches.get_one::<String>("target").unwrap().clone(),
+            count: matches.get_one::<usize>("count").unwrap().clone(),
         }
     }
 }
@@ -62,7 +64,7 @@ fn parse_packet_loss(stdout: &[u8]) -> f64 {
         .unwrap_or(0.0)
 }
 
-fn main() {
+pub fn main() {
     let args = Args::parse();
     
     println!(
@@ -94,12 +96,10 @@ fn main() {
                     break;
                 }
                 
-                let output = Command::new("ping")
+                let output = std::process::Command::new("ping")
                     .arg("-c")
                     .arg(count.to_string())
                     .arg(target.clone())
-                    .stdout(Stdio::piped())
-                    .stderr(Stdio::null())
                     .output();
                 
                 if let Ok(output) = output {
