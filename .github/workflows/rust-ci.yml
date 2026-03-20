@@ -40,3 +40,5 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: target/release/packet_loss_monitor
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
