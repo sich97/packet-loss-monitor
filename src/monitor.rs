@@ -41,7 +41,8 @@ impl Args {
                     .long("count")
                     .default_value("10")
                     .value_name("packets")
-                    .help("Number of packets to send per interval"),
+                    .help("Number of packets to send per interval")
+                    .value_parser(clap::value_parser!(usize)),
             )
             .get_matches();
 
