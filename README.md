@@ -55,3 +55,4 @@ cargo build --release
 ## License
 
 MIT
+# Release Notes
