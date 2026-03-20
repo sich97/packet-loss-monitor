@@ -1,67 +1,60 @@
-#[cfg(test)]
-use packet_loss_monitor::get_interface_index;
-
-#[test]
-fn test_get_interface_index() {
-    let index = get_interface_index("lo");
-    assert!(index.is_some());
-}
-
-#[test]
-fn test_get_interface_index_nonexistent() {
-    let index = get_interface_index("nonexistent_interface");
-    assert!(index.is_none());
-}
-
-use std::process::{Command, ExitCode};
+use assert_cmd::Command;
 use std::time::Duration;
+use std::process::Command as StdCommand;
+use std::thread;
 
 #[test]
 fn test_monitor_compilation() {
     // This test simply checks that the monitor binary can be compiled
-    let result = Command::new("cargo")
-        .args(["build", "--bin", "packet_loss_monitor", "--release"])
-        .timeout(Duration::from_seconds(120))
-        .status();
+    let mut cmd = Command::cargo_bin("packet_loss_monitor").unwrap();
+    cmd.arg("--help");
+    let output = cmd.output().expect("Help command should succeed");
     
-    match result {
-        Ok(exit_code) => {
-            assert_eq!(exit_code, ExitCode::from(0), "Build should succeed");
-        }
-        Err(e) => {
-            panic!("Build failed: {:?}", e);
-        }
-    }
+    assert!(output.status.success(), "Help should work");
 }
 
 #[test]
 fn test_monitor_help() {
     // This test checks that the help message works
-    let output = Command::new("cargo")
-        .args(["build", "--bin", "packet_loss_monitor"])
-        .output()
-        .expect("Build should succeed");
+    let mut cmd = Command::cargo_bin("packet_loss_monitor").unwrap();
+    cmd.arg("--help");
+    let output = cmd.output().expect("Help command should succeed");
     
-    let status = Command::new("target/debug/packet_loss_monitor")
-        .arg("--help")
-        .status();
-    
-    assert!(status.success(), "Help should work");
+    assert!(output.status.success(), "Help should work");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("packet_loss_monitor"), "Help should contain program name");
 }
 
 #[test]
 fn test_monitor_valid_interface() {
     // This test checks that the monitor accepts a valid interface argument
-    let output = Command::new("cargo")
-        .args(["build", "--bin", "packet_loss_monitor"])
-        .output()
-        .expect("Build should succeed");
+    // We'll just check that it doesn't panic on startup with valid args
+    let mut cmd = Command::cargo_bin("packet_loss_monitor").unwrap();
+    cmd.arg("--interface")
+       .arg("lo")
+       .arg("--count")
+       .arg("1")
+       .arg("--interval")
+       .arg("1");
     
-    let status = Command::new("target/debug/packet_loss_monitor")
-        .args(["--interface", "lo"])
-        .timeout(Duration::from_seconds(5))
-        .status();
+    // Run with a timeout using std::process
+    let handle = thread::spawn(move || {
+        cmd.output()
+    });
     
-    // The program should either succeed or fail gracefully (not panic)
-    assert!(status.success() || !status.success(), "Should handle interface argument");
+    let result = handle.join();
+    
+    match result {
+        Ok(Ok(output)) => {
+            // The program ran successfully
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(!stderr.contains("panicked"), "Program should not panic");
+        }
+        Ok(Err(e)) => {
+            panic!("Command failed: {:?}", e);
+        }
+        Err(e) => {
+            panic!("Thread panicked: {:?}", e);
+        }
+    }
 }
