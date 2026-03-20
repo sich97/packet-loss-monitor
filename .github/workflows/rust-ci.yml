@@ -28,17 +28,24 @@ jobs:
       - name: Set up Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install GitHub CLI
+        run: |
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+          chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+          apt update
+          apt install gh -y
+
       - name: Build release
         run: cargo build --release
 
       - name: Create Release
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: v0.1.0
-          name: "Release v0.1.0"
-          draft: false
-          prerelease: false
-          generate_release_notes: true
-          files: target/release/packet_loss_monitor
+        run: |
+          gh release create v0.1.0 \
+            --title "Release v0.1.0" \
+            --notes "Automated release" \
+            --draft=false \
+            --prerelease=false \
+            target/release/packet_loss_monitor
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
