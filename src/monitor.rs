@@ -49,7 +49,7 @@ impl Args {
             interface: matches.get_one::<String>("interface").unwrap().clone(),
             interval: matches.get_one::<u64>("interval").unwrap().clone(),
             target: matches.get_one::<String>("target").unwrap().clone(),
-            packets: matches.get_one::<usize>("count").unwrap().clone(),
+            packets: matches.get_one::<usize>("packets").unwrap().clone(),
         }
     }
 }
