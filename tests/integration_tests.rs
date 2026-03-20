@@ -1,6 +1,4 @@
 use assert_cmd::Command;
-use std::time::Duration;
-use std::process::Command as StdCommand;
 use std::thread;
 
 #[test]
