@@ -46,6 +46,7 @@ jobs:
             --notes "Automated release" \
             --draft=false \
             --prerelease=false \
+            --repo ${{ github.repository }} \
             target/release/packet_loss_monitor
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
