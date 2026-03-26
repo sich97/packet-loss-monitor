@@ -67,8 +67,22 @@ impl Args {
 /// Detects the default gateway by parsing /proc/net/route
 /// Returns the gateway for the default route (0.0.0.0) regardless of interface
 fn detect_default_gateway(_interface: &str) -> Result<String, String> {
-    let route_content = fs::read_to_string("/proc/net/route")
-        .map_err(|e| format!("Failed to read /proc/net/route: {}", e))?;
+    eprintln!("[DEBUG] Starting default gateway detection...");
+    
+    let route_content = match fs::read_to_string("/proc/net/route") {
+        Ok(content) => {
+            eprintln!("[DEBUG] Successfully read /proc/net/route");
+            content
+        }
+        Err(e) => {
+            return Err(format!("Failed to read /proc/net/route: {}", e));
+        }
+    };
+
+    eprintln!("[DEBUG] /proc/net/route content:");
+    for (line_num, line) in route_content.lines().enumerate() {
+        eprintln!("[DEBUG]   Line {}: {}", line_num, line);
+    }
 
     for line in route_content.lines() {
         let parts: Vec<&str> = line.split_whitespace().collect();
@@ -78,20 +92,39 @@ fn detect_default_gateway(_interface: &str) -> Result<String, String> {
             continue;
         }
 
+        eprintln!("[DEBUG] Processing route: iface={}, dest={}, gw={}", 
+                   parts[0], parts[1], parts[2]);
+        
         // Check if this is the default route (destination == 00000000)
         if parts[1] == "00000000" {
+            eprintln!("[DEBUG] Found default route! Gateway hex: {}", parts[2]);
+            
             // Gateway is in hex format, convert to IP
-            if let Some(gateway_hex) = parts[2].strip_prefix("0x") {
-                let gateway_u32 = u32::from_str_radix(gateway_hex, 16)
-                    .map_err(|e| format!("Invalid gateway hex: {}", e))?;
-                
-                // Convert little-endian to network byte order
-                let gateway_ip = Ipv4Addr::from(u32::from_le(gateway_u32));
-                return Ok(gateway_ip.to_string());
+            let gateway_hex = if parts[2].starts_with("0x") {
+                &parts[2][2..]
+            } else {
+                &parts[2]
+            };
+            
+            eprintln!("[DEBUG] Gateway hex (no prefix): {}", gateway_hex);
+            
+            match u32::from_str_radix(gateway_hex, 16) {
+                Ok(gateway_u32) => {
+                    eprintln!("[DEBUG] Gateway u32: {}", gateway_u32);
+                    // /proc/net/route stores IPs in network byte order (big-endian)
+                    // So we need to convert from big-endian to host byte order
+                    let gateway_ip = Ipv4Addr::from(u32::from_be(gateway_u32));
+                    eprintln!("[DEBUG] Converted IP (big-endian): {}", gateway_ip);
+                    return Ok(gateway_ip.to_string());
+                }
+                Err(e) => {
+                    return Err(format!("Invalid gateway hex '{}': {}", gateway_hex, e));
+                }
             }
         }
     }
 
+    eprintln!("[DEBUG] No default gateway found in /proc/net/route");
     Err("No default gateway found".to_string())
 }
 
@@ -122,6 +155,12 @@ fn parse_packet_loss(stdout: &[u8]) -> f64 {
 
 pub fn main() {
     let args = Args::parse();
+    
+    eprintln!("[DEBUG] Interface: {}", args.interface);
+    eprintln!("[DEBUG] Target: {}", args.target);
+    eprintln!("[DEBUG] Interval: {}s", args.interval);
+    eprintln!("[DEBUG] Packets per interval: {}", args.packets);
+    println!();
     
     println!(
         "Packet Loss Monitor - Monitoring {} for packet loss\n",
