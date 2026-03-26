@@ -4,6 +4,7 @@ use std::thread;
 use std::sync::{Arc, Mutex};
 use std::fs;
 use std::net::Ipv4Addr;
+use std::process::Command as ProcessCommand;
 
 #[derive(Debug)]
 struct Args {
@@ -11,6 +12,8 @@ struct Args {
     interval: u64,
     target: String,
     packets: usize,
+    popup: bool,
+    test: bool,
 }
 
 impl Args {
@@ -45,6 +48,18 @@ impl Args {
                     .help("Number of packets to send per interval")
                     .value_parser(clap::value_parser!(usize)),
             )
+            .arg(
+                Arg::new("popup")
+                    .long("popup")
+                    .action(clap::ArgAction::SetTrue)
+                    .help("Show popup alert when packet loss is detected"),
+            )
+            .arg(
+                Arg::new("test")
+                    .long("test")
+                    .action(clap::ArgAction::SetTrue)
+                    .help("Simulate packet loss (1 in 10 packets lost) for testing"),
+            )
             .get_matches();
 
         let interface = matches.get_one::<String>("interface").unwrap().clone();
@@ -60,6 +75,8 @@ impl Args {
             interval: matches.get_one::<u64>("interval").unwrap().clone(),
             target,
             packets: matches.get_one::<usize>("packets").unwrap().clone(),
+            popup: matches.get_one::<bool>("popup").copied().unwrap_or(false),
+            test: matches.get_one::<bool>("test").copied().unwrap_or(false),
         }
     }
 }
@@ -128,6 +145,20 @@ fn detect_default_gateway(_interface: &str) -> Result<String, String> {
     Err("No default gateway found".to_string())
 }
 
+/// Shows a popup alert using xmessage (works on most Linux desktop environments)
+fn show_popup_alert(message: &str) {
+    eprintln!("[ALERT] Showing popup: {}", message);
+    
+    // Use xmessage as a fallback that works on most X11 desktop environments
+    let output = ProcessCommand::new("xmessage")
+        .args(&["-center", "-timeout", "10", message])
+        .output();
+    
+    if output.is_err() {
+        eprintln!("[ALERT] Failed to show popup: xmessage not available");
+    }
+}
+
 fn parse_packet_loss(stdout: &[u8]) -> f64 {
     let stdout = String::from_utf8_lossy(&stdout);
     stdout.lines()
@@ -160,6 +191,8 @@ pub fn main() {
     eprintln!("[DEBUG] Target: {}", args.target);
     eprintln!("[DEBUG] Interval: {}s", args.interval);
     eprintln!("[DEBUG] Packets per interval: {}", args.packets);
+    eprintln!("[DEBUG] Popup alerts: {}", args.popup);
+    eprintln!("[DEBUG] Test mode: {}", args.test);
     println!();
     
     println!(
@@ -170,6 +203,12 @@ pub fn main() {
         "Target: {}, Interval: {}s, Packets per interval: {}",
         args.target, args.interval, args.packets
     );
+    if args.popup {
+        println!("Popup alerts: ENABLED");
+    }
+    if args.test {
+        println!("Test mode: ENABLED (simulating 10% packet loss)");
+    }
     println!("Press Ctrl+C to stop...\n");
 
     let results = Arc::new(Mutex::new(Vec::<f64>::new()));
@@ -182,6 +221,8 @@ pub fn main() {
         let target = args.target.clone();
         let interval = args.interval;
         let packets = args.packets;
+        let popup = args.popup;
+        let test = args.test;
         
         thread::spawn(move || {
             let interval = Duration::from_secs(interval);
@@ -198,7 +239,12 @@ pub fn main() {
                     .output();
                 
                 if let Ok(output) = output {
-                    let packet_loss = parse_packet_loss(&output.stdout);
+                    let packet_loss = if test {
+                        // Simulate 10% packet loss in test mode
+                        10.0
+                    } else {
+                        parse_packet_loss(&output.stdout)
+                    };
                     results.lock().unwrap().push(packet_loss);
                     
                     let total_packets = packets;
@@ -213,6 +259,13 @@ pub fn main() {
                             "  ⚠ Warning: Packet loss detected on interface {}",
                             interface
                         );
+                        
+                        if popup {
+                            show_popup_alert(&format!(
+                                "Packet Loss Alert!\nInterface: {}\nLoss: {:.2}%",
+                                interface, packet_loss
+                            ));
+                        }
                     }
                     println!();
                 }
