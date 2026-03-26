@@ -45,8 +45,8 @@ jobs:
       - name: Create Release
         run: |
           VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-          gh release create "$VERSION" \
-            --title "Release $VERSION" \
+          gh release create "v$VERSION" \
+            --title "Release v$VERSION" \
             --notes "Automated release" \
             --draft=false \
             --prerelease=false \
