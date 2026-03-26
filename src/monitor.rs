@@ -382,6 +382,8 @@ mod tests {
             interval: 5u64,
             target: "1.1.1.1".to_string(),
             packets: 10usize,
+            popup: false,
+            test: false,
         };
         
         assert_eq!(args.interface, "eth0");
@@ -398,6 +400,8 @@ mod tests {
             interval: 10u64,
             target: "8.8.8.8".to_string(),
             packets: 20usize,
+            popup: true,
+            test: true,
         };
         
         assert_eq!(args.interface, "wlan0");
