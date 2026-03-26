@@ -44,8 +44,9 @@ jobs:
 
       - name: Create Release
         run: |
-          gh release create v0.1.0 \
-            --title "Release v0.1.0" \
+          VERSION=$(grep '^version' Cargo.toml | head -1 | awk '{print $2}')
+          gh release create "$VERSION" \
+            --title "Release $VERSION" \
             --notes "Automated release" \
             --draft=false \
             --prerelease=false \
