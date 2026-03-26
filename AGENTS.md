@@ -197,6 +197,42 @@ curl -s -H "Authorization: token $GITHUB_TOKEN" \
 
 ---
 
+## Workflow Log Reading Methods
+
+### Method 1: Using GitHub CLI (Recommended)
+```bash
+# Watch a specific workflow run
+gh run watch <RUN_ID> --repo sich97/packet-loss-monitor
+
+# List recent workflow runs
+gh run list --repo sich97/packet-loss-monitor --limit 5
+
+# View logs for a specific job
+gh run view <RUN_ID> --job <JOB_NUMBER> --log
+```
+
+### Method 2: Using GitHub API via curl
+```bash
+# Get the latest run ID
+curl -s -H "Authorization: token $GITHUB_TOKEN" \
+  "https://api.github.com/repos/sich97/packet-loss-monitor/actions/runs?per_page=1" | \
+  python3 -c "import sys, json; data = json.load(sys.stdin); print(data['workflow_runs'][0]['id'])"
+
+# Get job logs directly
+curl -sL -H "Authorization: token $GITHUB_TOKEN" \
+  "https://api.github.com/repos/sich97/packet-loss-monitor/actions/jobs/<JOB_ID>/logs" | tail -100
+```
+
+### Method 3: Using GitHub Web Interface
+1. Navigate to: `https://github.com/sich97/packet-loss-monitor/actions`
+2. Select the desired workflow run
+3. Click on the specific job
+4. Scroll down to view job logs
+5. Download logs as .txt file if needed
+```
+
+---
+
 ## Best Practices
 
 1. **Always use `sudo`** for system package installation in GitHub Actions
