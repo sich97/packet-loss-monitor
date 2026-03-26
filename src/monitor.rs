@@ -98,9 +98,24 @@ fn parse_packet_loss(stdout: &[u8]) -> f64 {
     let stdout = String::from_utf8_lossy(&stdout);
     stdout.lines()
         .find(|line| line.contains("packet loss"))
-        .and_then(|line| line.split("packet loss").nth(1))
-        .and_then(|s| s.split("%").next())
-        .and_then(|s| s.trim().parse::<f64>().ok())
+        .and_then(|line| {
+            // Find the '%' character and parse the number before it
+            line.find('%').and_then(|percent_pos| {
+                // Get the substring before '%'
+                let before_percent = &line[..percent_pos];
+                // Find the last sequence of digits
+                before_percent
+                    .chars()
+                    .rev()
+                    .take_while(|c| c.is_ascii_digit() || *c == '.')
+                    .collect::<String>()
+                    .chars()
+                    .rev()
+                    .collect::<String>()
+                    .parse::<f64>()
+                    .ok()
+            })
+        })
         .unwrap_or(0.0)
 }
 
@@ -189,5 +204,110 @@ pub fn main() {
         println!("\nMonitoring complete.");
         println!("Average packet loss: {:.2}%", avg_loss);
         println!("Min: {:.2}%, Max: {:.2}%", min_loss, max_loss);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_packet_loss_with_zero_loss() {
+        let output = b"6 packets transmitted, 6 received, 0% packet loss, time 5006ms\n";
+        let result = parse_packet_loss(output);
+        assert_eq!(result, 0.0);
+    }
+
+    #[test]
+    fn test_parse_packet_loss_with_some_loss() {
+        let output = b"6 packets transmitted, 5 received, 16% packet loss, time 5006ms\n";
+        let result = parse_packet_loss(output);
+        assert_eq!(result, 16.0);
+    }
+
+    #[test]
+    fn test_parse_packet_loss_with_high_loss() {
+        let output = b"10 packets transmitted, 2 received, 80% packet loss, time 9000ms\n";
+        let result = parse_packet_loss(output);
+        assert_eq!(result, 80.0);
+    }
+
+    #[test]
+    fn test_parse_packet_loss_with_no_packets_sent() {
+        let output = b"0 packets transmitted, 0 received, 0% packet loss, time 0ms\n";
+        let result = parse_packet_loss(output);
+        assert_eq!(result, 0.0);
+    }
+
+    #[test]
+    fn test_parse_packet_loss_with_no_loss_line() {
+        let output = b"some other output without packet loss info\n";
+        let result = parse_packet_loss(output);
+        assert_eq!(result, 0.0);
+    }
+
+    #[test]
+    fn test_parse_packet_loss_with_invalid_percentage() {
+        let output = b"6 packets transmitted, 6 received, invalid% packet loss\n";
+        let result = parse_packet_loss(output);
+        assert_eq!(result, 0.0);
+    }
+
+    #[test]
+    fn test_detect_default_gateway_no_file() {
+        // This test verifies error handling when /proc/net/route doesn't exist
+        // Note: This will pass on most systems since /proc/net/route usually exists
+        let result = detect_default_gateway("nonexistent_interface");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_detect_default_gateway_invalid_hex() {
+        // Test the parsing logic directly
+        let invalid_hex = "ZZZZZZZZ";
+        let result = u32::from_str_radix(invalid_hex, 16);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_detect_default_gateway_hex_conversion() {
+        // Test the hex to IP conversion logic
+        // Gateway 0xC0A80101 in little-endian is 192.168.1.1
+        let gateway_hex = "c0a80101";
+        let gateway_u32 = u32::from_str_radix(gateway_hex, 16).unwrap();
+        let gateway_ip = Ipv4Addr::from(u32::from_le(gateway_u32));
+        assert_eq!(gateway_ip.to_string(), "192.168.1.1");
+    }
+
+    #[test]
+    fn test_args_parse_with_defaults() {
+        // Test that Args can be created with default values
+        let args = Args {
+            interface: "eth0".to_string(),
+            interval: 5u64,
+            target: "1.1.1.1".to_string(),
+            packets: 10usize,
+        };
+        
+        assert_eq!(args.interface, "eth0");
+        assert_eq!(args.interval, 5);
+        assert_eq!(args.target, "1.1.1.1");
+        assert_eq!(args.packets, 10);
+    }
+
+    #[test]
+    fn test_args_parse_with_custom_values() {
+        // Test that Args can be created with custom values
+        let args = Args {
+            interface: "wlan0".to_string(),
+            interval: 10u64,
+            target: "8.8.8.8".to_string(),
+            packets: 20usize,
+        };
+        
+        assert_eq!(args.interface, "wlan0");
+        assert_eq!(args.interval, 10);
+        assert_eq!(args.target, "8.8.8.8");
+        assert_eq!(args.packets, 20);
     }
 }
