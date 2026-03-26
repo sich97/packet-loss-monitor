@@ -2,6 +2,8 @@ use clap::{Arg, Command};
 use std::time::Duration;
 use std::thread;
 use std::sync::{Arc, Mutex};
+use std::fs;
+use std::net::Ipv4Addr;
 
 #[derive(Debug)]
 struct Args {
@@ -25,8 +27,7 @@ impl Args {
             .arg(
                 Arg::new("target")
                     .long("target")
-                    .default_value("1.1.1.1")
-                    .help("Target IP for ping tests"),
+                    .help("Target IP for ping tests (defaults to default gateway)"),
             )
             .arg(
                 Arg::new("interval")
@@ -46,13 +47,51 @@ impl Args {
             )
             .get_matches();
 
+        let interface = matches.get_one::<String>("interface").unwrap().clone();
+        let target = matches
+            .get_one::<String>("target")
+            .map(|s| s.clone())
+            .unwrap_or_else(|| {
+                detect_default_gateway(&interface).unwrap_or_else(|_| "1.1.1.1".to_string())
+            });
+
         Args {
-            interface: matches.get_one::<String>("interface").unwrap().clone(),
+            interface,
             interval: matches.get_one::<u64>("interval").unwrap().clone(),
-            target: matches.get_one::<String>("target").unwrap().clone(),
+            target,
             packets: matches.get_one::<usize>("packets").unwrap().clone(),
         }
     }
+}
+
+/// Detects the default gateway for a given network interface by parsing /proc/net/route
+fn detect_default_gateway(interface: &str) -> Result<String, String> {
+    let route_content = fs::read_to_string("/proc/net/route")
+        .map_err(|e| format!("Failed to read /proc/net/route: {}", e))?;
+
+    for line in route_content.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        
+        // Skip header line
+        if parts.is_empty() || parts[0] == "Iface" {
+            continue;
+        }
+
+        // Check if this is the default route (destination == 00000000)
+        if parts[1] == "00000000" && parts[0] == interface {
+            // Gateway is in hex format, convert to IP
+            if let Some(gateway_hex) = parts[2].strip_prefix("0x") {
+                let gateway_u32 = u32::from_str_radix(gateway_hex, 16)
+                    .map_err(|e| format!("Invalid gateway hex: {}", e))?;
+                
+                // Convert little-endian to network byte order
+                let gateway_ip = Ipv4Addr::from(u32::from_le(gateway_u32));
+                return Ok(gateway_ip.to_string());
+            }
+        }
+    }
+
+    Err(format!("No default gateway found for interface '{}'", interface))
 }
 
 fn parse_packet_loss(stdout: &[u8]) -> f64 {
