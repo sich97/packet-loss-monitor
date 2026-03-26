@@ -145,17 +145,27 @@ fn detect_default_gateway(_interface: &str) -> Result<String, String> {
     Err("No default gateway found".to_string())
 }
 
-/// Shows a popup alert using xmessage (works on most Linux desktop environments)
+/// Shows a popup alert using the Desktop Notification Specification (D-Bus)
+/// This works on KDE, GNOME, XFCE, and most modern Linux desktop environments
 fn show_popup_alert(message: &str) {
-    eprintln!("[ALERT] Showing popup: {}", message);
+    eprintln!("[ALERT] Showing notification: {}", message);
     
-    // Use xmessage as a fallback that works on most X11 desktop environments
-    let output = ProcessCommand::new("xmessage")
-        .args(&["-center", "-timeout", "10", message])
+    // Try notify-send first (standard D-Bus notification tool)
+    let output = ProcessCommand::new("notify-send")
+        .args(&[
+            "-u", "normal",
+            "-t", "5000",  // 5 second timeout
+            "Packet Loss Alert",
+            message
+        ])
         .output();
     
     if output.is_err() {
-        eprintln!("[ALERT] Failed to show popup: xmessage not available");
+        eprintln!("[ALERT] Failed to show notification: notify-send not available");
+        // Fallback to xmessage if notify-send is not available
+        let _ = ProcessCommand::new("xmessage")
+            .args(&["-center", "-timeout", "10", message])
+            .output();
     }
 }
 
