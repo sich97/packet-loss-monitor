@@ -104,22 +104,16 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Linux artifact
-        run: |
-          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-          gh release upload "v$VERSION" artifacts/linux/packet_loss_monitor "$(printf '%s' 'packet_loss_monitor-linux')" --clobber
+        run: bash -c 'VERSION=$(grep "^version" Cargo.toml | head -1 | sed "s/version = \"\(.*\)"/\1/"); gh release upload "v$VERSION" artifacts/linux/packet_loss_monitor packet_loss_monitor-linux --clobber'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload macOS artifact
-        run: |
-          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-          gh release upload "v$VERSION" artifacts/macos/packet_loss_monitor "$(printf '%s' 'packet_loss_monitor-macos')" --clobber
+        run: bash -c 'VERSION=$(grep "^version" Cargo.toml | head -1 | sed "s/version = \"\(.*\)"/\1/"); gh release upload "v$VERSION" artifacts/macos/packet_loss_monitor packet_loss_monitor-macos --clobber'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload Windows artifact
-        run: |
-          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-          gh release upload "v$VERSION" artifacts/windows/packet_loss_monitor.exe "$(printf '%s' 'packet_loss_monitor-windows.exe')" --clobber
+        run: bash -c 'VERSION=$(grep "^version" Cargo.toml | head -1 | sed "s/version = \"\(.*\)"/\1/"); gh release upload "v$VERSION" artifacts/windows/packet_loss_monitor.exe packet_loss_monitor-windows.exe --clobber'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
