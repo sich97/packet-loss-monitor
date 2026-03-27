@@ -1,5 +1,6 @@
 #!/bin/bash
 set -e
+set -f  # Disable glob expansion
 
 VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
 
