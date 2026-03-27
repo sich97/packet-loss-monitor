@@ -1,6 +1,6 @@
 #!/bin/bash
 set -e
-set +o failglob  # Disable failglob to prevent errors on non-matching globs
+shopt -u failglob  # Disable failglob to prevent errors on non-matching globs
 
 VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
 
