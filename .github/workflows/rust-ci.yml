@@ -68,7 +68,9 @@ jobs:
           merge-multiple: true
 
       - name: Set executable permissions
-        run: chmod +x artifacts/linux/packet_loss_monitor artifacts/macos/packet_loss_monitor
+        run: |
+          chmod +x artifacts/packet_loss_monitor-x86_64-unknown-linux-gnu/packet_loss_monitor
+          chmod +x artifacts/packet_loss_monitor-x86_64-apple-darwin/packet_loss_monitor
         shell: bash
 
       - name: Install GitHub CLI
