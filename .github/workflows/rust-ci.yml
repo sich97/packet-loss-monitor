@@ -105,6 +105,7 @@ jobs:
 
       - name: Upload Linux artifact
         run: |
+          set -f
           VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
           ARTIFACT_NAME="packet_loss_monitor-linux"
           gh release upload "v$VERSION" artifacts/linux/packet_loss_monitor "$ARTIFACT_NAME" --clobber
@@ -113,6 +114,7 @@ jobs:
 
       - name: Upload macOS artifact
         run: |
+          set -f
           VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
           ARTIFACT_NAME="packet_loss_monitor-macos"
           gh release upload "v$VERSION" artifacts/macos/packet_loss_monitor "$ARTIFACT_NAME" --clobber
@@ -121,6 +123,7 @@ jobs:
 
       - name: Upload Windows artifact
         run: |
+          set -f
           VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
           ARTIFACT_NAME="packet_loss_monitor-windows.exe"
           gh release upload "v$VERSION" artifacts/windows/packet_loss_monitor.exe "$ARTIFACT_NAME" --clobber
