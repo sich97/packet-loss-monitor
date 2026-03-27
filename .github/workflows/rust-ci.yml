@@ -61,23 +61,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Linux artifact
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: packet_loss_monitor-x86_64-unknown-linux-gnu
-          path: artifacts/linux
-
-      - name: Download macOS artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: packet_loss_monitor-x86_64-apple-darwin
-          path: artifacts/macos
-
-      - name: Download Windows artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: packet_loss_monitor-x86_64-pc-windows-gnu
-          path: artifacts/windows
+          path: artifacts
+          merge-multiple: true
 
       - name: Set executable permissions
         run: chmod +x artifacts/linux/packet_loss_monitor artifacts/macos/packet_loss_monitor
