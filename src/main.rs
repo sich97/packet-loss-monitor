@@ -1,3 +1,4 @@
+mod platform;
 mod monitor;
 
 fn main() {

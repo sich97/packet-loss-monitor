@@ -1,13 +1,15 @@
 [package]
 name = "packet_loss_monitor"
 version = "0.7.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 clap = { version = "4.5.60", features = ["cargo"] }
 if-addrs = "0.10"
 ping = "0.4"
 tokio = { version = "1.34.0", features = ["full"] }
+ctrlc = "3.4"
+regex = "1.10"
 
 [dev-dependencies]
 assert_cmd = "2.0.12"

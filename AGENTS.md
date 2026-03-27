@@ -272,3 +272,82 @@ curl -s -H "Authorization: token $GITHUB_TOKEN" \
 curl -s -H "Authorization: token $GITHUB_TOKEN" \
   "https://api.github.com/repos/sich97/packet-loss-monitor/actions/runs?per_page=5"
 ```
+
+---
+
+## Cross-Platform Support (v0.8.0+)
+
+The application now supports Linux, macOS, and Windows through a platform abstraction layer.
+
+### Platform Abstraction
+
+All platform-specific functionality is implemented in the `src/platform/` module:
+
+- `src/platform/mod.rs` - Platform module with conditional compilation
+- `src/platform/linux.rs` - Linux-specific implementations
+- `src/platform/macos.rs` - macOS-specific implementations  
+- `src/platform/windows.rs` - Windows-specific implementations
+
+### Platform-Specific Implementations
+
+#### Ping Command
+- **Linux/macOS**: `ping -c <count> <host>`
+- **Windows**: `ping -n <count> <host>`
+
+#### Gateway Detection
+- **Linux**: Parses `/proc/net/route`
+- **macOS**: Uses `route -n get default`
+- **Windows**: Parses `route print -4` output
+
+#### Notifications
+- **Linux**: Uses `notify-send` (D-Bus)
+- **macOS**: Uses `osascript` (AppleScript)
+- **Windows**: Uses PowerShell toast notifications
+
+#### Interface Detection
+- **Linux**: Parses `/proc/net/dev`
+- **macOS**: Parses `ifconfig` output
+- **Windows**: Parses `ipconfig /all` output
+
+### Building for Different Platforms
+
+```bash
+# Linux (x86_64)
+cargo build --release --target x86_64-unknown-linux-gnu
+
+# macOS (x86_64)
+cargo build --release --target x86_64-apple-darwin
+
+# Windows (x86_64)
+cargo build --release --target x86_64-pc-windows-gnu
+```
+
+### New Features in v0.8.0
+
+- `--list-interfaces` flag to list all available network interfaces
+- Automatic default gateway detection (no longer requires manual specification)
+- Cross-platform signal handling with `ctrlc` crate
+- Improved ping output parsing with regex
+
+### Testing Cross-Platform Code
+
+```bash
+# Run all tests
+cargo test
+
+# Test on specific platform
+cargo test --target <target-triple>
+```
+
+### Known Limitations
+
+1. **Windows notifications**: May require Administrator privileges
+2. **macOS notifications**: May need accessibility permissions in System Preferences
+3. **Linux notifications**: Requires `notify-send` to be installed (part of `libnotify-bin`)
+
+### Future Improvements
+
+1. Add support for more notification backends
+2. Implement config file support for persistent settings
+3. Add multi-platform CI/CD pipeline
+4. Consider using `network-interface` crate for more robust interface detection

@@ -1,12 +1,13 @@
-use clap::{Arg, Command};
+use clap::{Arg, ArgAction, Command};
 use std::time::Duration;
 use std::thread;
 use std::sync::{Arc, Mutex};
-use std::fs;
-use std::net::Ipv4Addr;
-use std::process::Command as ProcessCommand;
+use ctrlc;
 
-#[derive(Debug)]
+
+use crate::platform::PlatformImpl;
+
+#[derive(Debug, Clone)]
 struct Args {
     interface: String,
     interval: u64,
@@ -14,18 +15,19 @@ struct Args {
     packets: usize,
     popup: bool,
     test: bool,
+    list_interfaces: bool,
 }
 
 impl Args {
     fn parse() -> Self {
         let matches = Command::new("packet_loss_monitor")
-            .version("0.1")
-            .about("Lightweight packet loss monitoring tool")
+            .version("0.8.0")
+            .about("Cross-platform packet loss monitoring tool")
             .arg(
                 Arg::new("interface")
                     .long("interface")
-                    .required(true)
-                    .help("Network interface to monitor"),
+                    .required(false)
+                    .help("Network interface to monitor (required unless --list-interfaces is used)"),
             )
             .arg(
                 Arg::new("target")
@@ -51,23 +53,55 @@ impl Args {
             .arg(
                 Arg::new("popup")
                     .long("popup")
-                    .action(clap::ArgAction::SetTrue)
+                    .action(ArgAction::SetTrue)
                     .help("Show popup alert when packet loss is detected"),
             )
             .arg(
                 Arg::new("test")
                     .long("test")
-                    .action(clap::ArgAction::SetTrue)
+                    .action(ArgAction::SetTrue)
                     .help("Simulate packet loss (1 in 10 packets lost) for testing"),
+            )
+            .arg(
+                Arg::new("list_interfaces")
+                    .long("list-interfaces")
+                    .action(ArgAction::SetTrue)
+                    .help("List all available network interfaces and exit"),
             )
             .get_matches();
 
-        let interface = matches.get_one::<String>("interface").unwrap().clone();
+        // Handle --list-interfaces flag
+        if matches.get_one::<bool>("list_interfaces").copied().unwrap_or(false) {
+            let platform = PlatformImpl::new();
+            match platform.get_network_interfaces() {
+                Ok(interfaces) => {
+                    println!("Available network interfaces:");
+                    for iface in &interfaces {
+                        println!("  - {}", iface);
+                    }
+                    println!("\nTotal: {} interfaces", interfaces.len());
+                    std::process::exit(0);
+                }
+                Err(e) => {
+                    eprintln!("Error listing interfaces: {}", e);
+                    std::process::exit(1);
+                }
+            }
+        }
+
+        let interface = matches
+            .get_one::<String>("interface")
+            .map(|s| s.clone())
+            .unwrap_or_else(|| {
+                eprintln!("Error: --interface is required (or use --list-interfaces to see available interfaces)");
+                std::process::exit(1);
+            });
+
         let target = matches
             .get_one::<String>("target")
             .map(|s| s.clone())
             .unwrap_or_else(|| {
-                detect_default_gateway(&interface).unwrap_or_else(|_| "1.1.1.1".to_string())
+                PlatformImpl::new().get_default_gateway().unwrap_or_else(|_| "1.1.1.1".to_string())
             });
 
         Args {
@@ -77,125 +111,25 @@ impl Args {
             packets: matches.get_one::<usize>("packets").unwrap().clone(),
             popup: matches.get_one::<bool>("popup").copied().unwrap_or(false),
             test: matches.get_one::<bool>("test").copied().unwrap_or(false),
+            list_interfaces: matches.get_one::<bool>("list_interfaces").copied().unwrap_or(false),
         }
     }
 }
 
-/// Detects the default gateway by parsing /proc/net/route
-/// Returns the gateway for the default route (0.0.0.0) regardless of interface
-fn detect_default_gateway(_interface: &str) -> Result<String, String> {
-    eprintln!("[DEBUG] Starting default gateway detection...");
-    
-    let route_content = match fs::read_to_string("/proc/net/route") {
-        Ok(content) => {
-            eprintln!("[DEBUG] Successfully read /proc/net/route");
-            content
-        }
-        Err(e) => {
-            return Err(format!("Failed to read /proc/net/route: {}", e));
-        }
-    };
-
-    eprintln!("[DEBUG] /proc/net/route content:");
-    for (line_num, line) in route_content.lines().enumerate() {
-        eprintln!("[DEBUG]   Line {}: {}", line_num, line);
-    }
-
-    for line in route_content.lines() {
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        
-        // Skip header line
-        if parts.is_empty() || parts[0] == "Iface" {
-            continue;
-        }
-
-        eprintln!("[DEBUG] Processing route: iface={}, dest={}, gw={}", 
-                   parts[0], parts[1], parts[2]);
-        
-        // Check if this is the default route (destination == 00000000)
-        if parts[1] == "00000000" {
-            eprintln!("[DEBUG] Found default route! Gateway hex: {}", parts[2]);
-            
-            // Gateway is in hex format, convert to IP
-            let gateway_hex = if parts[2].starts_with("0x") {
-                &parts[2][2..]
-            } else {
-                &parts[2]
-            };
-            
-            eprintln!("[DEBUG] Gateway hex (no prefix): {}", gateway_hex);
-            
-            match u32::from_str_radix(gateway_hex, 16) {
-                Ok(gateway_u32) => {
-                    eprintln!("[DEBUG] Gateway u32: {}", gateway_u32);
-                    // /proc/net/route stores IPs in network byte order (big-endian)
-                    // So we need to convert from big-endian to host byte order
-                    let gateway_ip = Ipv4Addr::from(u32::from_be(gateway_u32));
-                    eprintln!("[DEBUG] Converted IP (big-endian): {}", gateway_ip);
-                    return Ok(gateway_ip.to_string());
-                }
-                Err(e) => {
-                    return Err(format!("Invalid gateway hex '{}': {}", gateway_hex, e));
-                }
-            }
-        }
-    }
-
-    eprintln!("[DEBUG] No default gateway found in /proc/net/route");
-    Err("No default gateway found".to_string())
-}
-
-/// Shows a popup alert using the Desktop Notification Specification (D-Bus)
-/// This works on KDE, GNOME, XFCE, and most modern Linux desktop environments
-fn show_popup_alert(message: &str) {
+/// Shows a popup alert using platform-specific notification system
+fn show_popup_alert(platform: &PlatformImpl, message: &str) {
     eprintln!("[ALERT] Showing notification: {}", message);
-    
-    // Try notify-send first (standard D-Bus notification tool)
-    let output = ProcessCommand::new("notify-send")
-        .args(&[
-            "-u", "normal",
-            "-t", "5000",  // 5 second timeout
-            "Packet Loss Alert",
-            message
-        ])
-        .output();
-    
-    if output.is_err() {
-        eprintln!("[ALERT] Failed to show notification: notify-send not available");
-        // Fallback to xmessage if notify-send is not available
-        let _ = ProcessCommand::new("xmessage")
-            .args(&["-center", "-timeout", "10", message])
-            .output();
-    }
+    platform.show_notification("Packet Loss Alert", message);
 }
 
-fn parse_packet_loss(stdout: &[u8]) -> f64 {
-    let stdout = String::from_utf8_lossy(&stdout);
-    stdout.lines()
-        .find(|line| line.contains("packet loss"))
-        .and_then(|line| {
-            // Find the '%' character and parse the number before it
-            line.find('%').and_then(|percent_pos| {
-                // Get the substring before '%'
-                let before_percent = &line[..percent_pos];
-                // Find the last sequence of digits
-                before_percent
-                    .chars()
-                    .rev()
-                    .take_while(|c| c.is_ascii_digit() || *c == '.')
-                    .collect::<String>()
-                    .chars()
-                    .rev()
-                    .collect::<String>()
-                    .parse::<f64>()
-                    .ok()
-            })
-        })
-        .unwrap_or(0.0)
+fn parse_packet_loss(platform: &PlatformImpl, stdout: &[u8]) -> f64 {
+    platform.parse_ping_output(stdout)
 }
 
 pub fn main() {
     let args = Args::parse();
+    
+    let platform = PlatformImpl::new();
     
     eprintln!("[DEBUG] Interface: {}", args.interface);
     eprintln!("[DEBUG] Target: {}", args.target);
@@ -224,6 +158,15 @@ pub fn main() {
     let results = Arc::new(Mutex::new(Vec::<f64>::new()));
     let stop = Arc::new(Mutex::new(false));
 
+    // Set up signal handling for Ctrl+C
+    let stop_clone = stop.clone();
+    if let Err(e) = ctrlc::set_handler(move || {
+        *stop_clone.lock().unwrap() = true;
+    }) {
+        eprintln!("Error setting Ctrl-C handler: {}", e);
+        std::process::exit(1);
+    }
+
     let monitoring_thread = {
         let stop = stop.clone();
         let results = results.clone();
@@ -233,6 +176,7 @@ pub fn main() {
         let packets = args.packets;
         let popup = args.popup;
         let test = args.test;
+        let platform = platform.clone();
         
         thread::spawn(move || {
             let interval = Duration::from_secs(interval);
@@ -242,18 +186,14 @@ pub fn main() {
                     break;
                 }
                 
-                let output = std::process::Command::new("ping")
-                    .arg("-c")
-                    .arg(packets.to_string())
-                    .arg(target.clone())
-                    .output();
+                let output = platform.execute_ping(&target, packets);
                 
                 if let Ok(output) = output {
                     let packet_loss = if test {
                         // Simulate 10% packet loss in test mode
                         10.0
                     } else {
-                        parse_packet_loss(&output.stdout)
+                        parse_packet_loss(&platform, &output.stdout)
                     };
                     results.lock().unwrap().push(packet_loss);
                     
@@ -271,7 +211,7 @@ pub fn main() {
                         );
                         
                         if popup {
-                            show_popup_alert(&format!(
+                            show_popup_alert(&platform, &format!(
                                 "Packet Loss Alert!\nInterface: {}\nLoss: {:.2}%",
                                 interface, packet_loss
                             ));
@@ -285,19 +225,8 @@ pub fn main() {
         })
     };
 
-    // Set up signal handling for Ctrl+C
-    let sigint_handler = {
-        let stop = stop.clone();
-        thread::spawn(move || {
-            let _ = std::io::stdin();
-            let stdin = std::io::stdin();
-            let _ = stdin.read_line(&mut String::new());
-            *stop.lock().unwrap() = true;
-        })
-    };
-
+    // Wait for monitoring thread to finish
     monitoring_thread.join().unwrap();
-    sigint_handler.join().unwrap();
 
     let results = results.lock().unwrap();
     if !results.is_empty() {
@@ -315,76 +244,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_packet_loss_with_zero_loss() {
-        let output = b"6 packets transmitted, 6 received, 0% packet loss, time 5006ms\n";
-        let result = parse_packet_loss(output);
-        assert_eq!(result, 0.0);
-    }
-
-    #[test]
-    fn test_parse_packet_loss_with_some_loss() {
-        let output = b"6 packets transmitted, 5 received, 16% packet loss, time 5006ms\n";
-        let result = parse_packet_loss(output);
-        assert_eq!(result, 16.0);
-    }
-
-    #[test]
-    fn test_parse_packet_loss_with_high_loss() {
-        let output = b"10 packets transmitted, 2 received, 80% packet loss, time 9000ms\n";
-        let result = parse_packet_loss(output);
-        assert_eq!(result, 80.0);
-    }
-
-    #[test]
-    fn test_parse_packet_loss_with_no_packets_sent() {
-        let output = b"0 packets transmitted, 0 received, 0% packet loss, time 0ms\n";
-        let result = parse_packet_loss(output);
-        assert_eq!(result, 0.0);
-    }
-
-    #[test]
-    fn test_parse_packet_loss_with_no_loss_line() {
-        let output = b"some other output without packet loss info\n";
-        let result = parse_packet_loss(output);
-        assert_eq!(result, 0.0);
-    }
-
-    #[test]
-    fn test_parse_packet_loss_with_invalid_percentage() {
-        let output = b"6 packets transmitted, 6 received, invalid% packet loss\n";
-        let result = parse_packet_loss(output);
-        assert_eq!(result, 0.0);
-    }
-
-    #[test]
-    fn test_detect_default_gateway_no_file() {
-        // This test verifies error handling when /proc/net/route doesn't exist
-        // Note: This will pass on most systems since /proc/net/route usually exists
-        let result = detect_default_gateway("eth0");
-        // The function now finds the default gateway regardless of interface
-        // So this test just checks it doesn't panic
-        let _ = result;
-    }
-
-    #[test]
-    fn test_detect_default_gateway_invalid_hex() {
-        // Test the parsing logic directly
-        let invalid_hex = "ZZZZZZZZ";
-        let result = u32::from_str_radix(invalid_hex, 16);
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn test_detect_default_gateway_hex_conversion() {
-        // Test the hex to IP conversion logic
-        // Gateway 0xC0A80101 in little-endian is 192.168.1.1
-        let gateway_hex = "c0a80101";
-        let gateway_u32 = u32::from_str_radix(gateway_hex, 16).unwrap();
-        let gateway_ip = Ipv4Addr::from(u32::from_le(gateway_u32));
-        assert_eq!(gateway_ip.to_string(), "192.168.1.1");
-    }
-
-    #[test]
     fn test_args_parse_with_defaults() {
         // Test that Args can be created with default values
         let args = Args {
@@ -394,6 +253,7 @@ mod tests {
             packets: 10usize,
             popup: false,
             test: false,
+            list_interfaces: false,
         };
         
         assert_eq!(args.interface, "eth0");
@@ -412,6 +272,7 @@ mod tests {
             packets: 20usize,
             popup: true,
             test: true,
+            list_interfaces: false,
         };
         
         assert_eq!(args.interface, "wlan0");

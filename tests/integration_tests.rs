@@ -1,5 +1,4 @@
 use assert_cmd::Command;
-use std::thread;
 
 #[test]
 fn test_monitor_compilation() {
@@ -7,7 +6,7 @@ fn test_monitor_compilation() {
     let mut cmd = Command::cargo_bin("packet_loss_monitor").unwrap();
     cmd.arg("--help");
     let output = cmd.output().expect("Help command should succeed");
-    
+
     assert!(output.status.success(), "Help should work");
 }
 
@@ -17,42 +16,19 @@ fn test_monitor_help() {
     let mut cmd = Command::cargo_bin("packet_loss_monitor").unwrap();
     cmd.arg("--help");
     let output = cmd.output().expect("Help command should succeed");
-    
+
     assert!(output.status.success(), "Help should work");
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(stdout.contains("packet_loss_monitor"), "Help should contain program name");
 }
 
 #[test]
-fn test_monitor_valid_interface() {
-    // This test checks that the monitor accepts a valid interface argument
-    // We'll just check that it doesn't panic on startup with valid args
+fn test_list_interfaces_flag() {
     let mut cmd = Command::cargo_bin("packet_loss_monitor").unwrap();
-    cmd.arg("--interface")
-       .arg("lo")
-       .arg("--count")
-       .arg("1")
-       .arg("--interval")
-       .arg("1");
+    cmd.arg("--list-interfaces");
+    let output = cmd.output().expect("List interfaces should succeed");
     
-    // Run with a timeout using std::process
-    let handle = thread::spawn(move || {
-        cmd.output()
-    });
-    
-    let result = handle.join();
-    
-    match result {
-        Ok(Ok(output)) => {
-            // The program ran successfully
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            assert!(!stderr.contains("panicked"), "Program should not panic");
-        }
-        Ok(Err(e)) => {
-            panic!("Command failed: {:?}", e);
-        }
-        Err(e) => {
-            panic!("Thread panicked: {:?}", e);
-        }
-    }
+    assert!(output.status.success(), "List interfaces should work");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Available network interfaces"), "Output should list interfaces");
 }
