@@ -61,14 +61,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all artifacts
+      - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
-          path: artifacts
-          merge-multiple: true
+          name: packet_loss_monitor-x86_64-unknown-linux-gnu
+          path: artifacts/linux
 
-      - name: Set executable permissions (Linux/macOS)
-        run: chmod +x packet_loss_monitor* 2>/dev/null || true
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: packet_loss_monitor-x86_64-apple-darwin
+          path: artifacts/macos
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: packet_loss_monitor-x86_64-pc-windows-gnu
+          path: artifacts/windows
+
+      - name: Set executable permissions
+        run: chmod +x artifacts/linux/packet_loss_monitor artifacts/macos/packet_loss_monitor
         shell: bash
 
       - name: Install GitHub CLI
@@ -88,8 +100,8 @@ jobs:
             --draft=false \
             --prerelease=false \
             --repo ${{ github.repository }} \
-            artifacts/packet_loss_monitor-x86_64-unknown-linux-gnu \
-            artifacts/packet_loss_monitor-x86_64-apple-darwin \
-            artifacts/packet_loss_monitor-x86_64-pc-windows-gnu.exe
+            artifacts/linux/packet_loss_monitor \
+            artifacts/macos/packet_loss_monitor \
+            artifacts/windows/packet_loss_monitor.exe
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
