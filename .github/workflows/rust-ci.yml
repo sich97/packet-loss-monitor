@@ -56,11 +56,7 @@ jobs:
       - name: Rename binary
         run: |
           mkdir -p output
-          cp target/${{ matrix.target }}/release/packet_loss_monitor output/${{ matrix.binary_name }}
-          # For Windows, also copy the .exe file
-          if [[ "${{ matrix.target }}" == *"windows"* ]]; then
-            cp target/${{ matrix.target }}/release/packet_loss_monitor.exe output/${{ matrix.binary_name }}
-          fi
+          cp target/${{ matrix.target }}/release/packet_loss_monitor* output/${{ matrix.binary_name }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
