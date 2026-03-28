@@ -136,13 +136,21 @@ jobs:
 
       - name: Upload Linux binary
         run: gh release upload "v${{ steps.version.outputs.version }}" artifacts/packet_loss_monitor-linux --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Upload macOS binary
         run: gh release upload "v${{ steps.version.outputs.version }}" artifacts/packet_loss_monitor-macos --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Upload Windows binary
         run: gh release upload "v${{ steps.version.outputs.version }}" artifacts/packet_loss_monitor-windows.exe --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Verify release
         run: |
           gh release view "v${{ steps.version.outputs.version }}" --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
