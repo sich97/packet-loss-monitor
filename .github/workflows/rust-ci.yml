@@ -131,6 +131,8 @@ jobs:
             --draft=false \
             --prerelease=false \
             --repo ${{ github.repository }}
+        env:
+          GH_TOKEN: ${{ github.token }}
 
       - name: Upload Linux binary
         run: gh release upload "v${{ steps.version.outputs.version }}" artifacts/packet_loss_monitor-linux --clobber
