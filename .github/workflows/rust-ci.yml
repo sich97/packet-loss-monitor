@@ -68,11 +68,23 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all artifacts
+      - name: Download Linux artifact
         uses: actions/download-artifact@v4
         with:
+          name: packet_loss_monitor-linux
           path: artifacts
-          merge-multiple: true
+
+      - name: Download macOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: packet_loss_monitor-macos
+          path: artifacts
+
+      - name: Download Windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: packet_loss_monitor-windows.exe
+          path: artifacts
 
       - name: List downloaded artifacts
         run: ls -la artifacts/
