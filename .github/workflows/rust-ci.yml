@@ -1,4 +1,4 @@
-name: Rust CI
+name: Rust CI/CD
 
 on:
   push:
@@ -9,8 +9,12 @@ on:
 permissions:
   contents: write
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,20 +26,22 @@ jobs:
         run: cargo test --workspace
 
   build:
-    name: Build for ${{ matrix.target }}
+    name: Build (${{ matrix.os }}/${{ matrix.target }})
     runs-on: ${{ matrix.os }}
+    needs: test
     strategy:
+      fail-fast: false
       matrix:
         include:
-          - target: x86_64-unknown-linux-gnu
-            os: ubuntu-latest
-            extension: ""
-          - target: x86_64-apple-darwin
-            os: macos-latest
-            extension: ""
-          - target: x86_64-pc-windows-gnu
-            os: windows-latest
-            extension: ".exe"
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            binary_name: packet_loss_monitor-linux
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            binary_name: packet_loss_monitor-macos
+          - os: windows-latest
+            target: x86_64-pc-windows-gnu
+            binary_name: packet_loss_monitor-windows.exe
     steps:
       - uses: actions/checkout@v4
 
@@ -44,44 +50,37 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Build release
+      - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
-        shell: bash
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: packet_loss_monitor-${{ matrix.target }}
-          path: target/${{ matrix.target }}/release/packet_loss_monitor${{ matrix.extension }}
+          name: ${{ matrix.binary_name }}
+          path: target/${{ matrix.target }}/release/${{ matrix.binary_name }}
+          retention-days: 7
 
   release:
-    needs: [test, build]
+    name: Create Release
     runs-on: ubuntu-latest
+    needs: build
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && startsWith(github.event.head_commit.message, 'Release')
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download Linux artifact
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: packet_loss_monitor-x86_64-unknown-linux-gnu
-          path: artifacts/linux
+          path: artifacts
+          merge-multiple: true
 
-      - name: Download macOS artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: packet_loss_monitor-x86_64-apple-darwin
-          path: artifacts/macos
-
-      - name: Download Windows artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: packet_loss_monitor-x86_64-pc-windows-gnu
-          path: artifacts/windows
+      - name: List downloaded artifacts
+        run: ls -la artifacts/
 
       - name: Set executable permissions
-        run: chmod +x artifacts/linux/packet_loss_monitor artifacts/macos/packet_loss_monitor
-        shell: bash
+        run: |
+          chmod +x artifacts/packet_loss_monitor-linux
+          chmod +x artifacts/packet_loss_monitor-macos
 
       - name: Install GitHub CLI
         run: |
@@ -91,19 +90,32 @@ jobs:
           sudo apt update
           sudo apt install gh -y
 
-      - name: Create Release
+      - name: Get version from Cargo.toml
+        id: version
         run: |
           VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
-          gh release create "v$VERSION" \
-            --title "Release v$VERSION" \
-            --notes "Automated release" \
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release version: v$VERSION"
+
+      - name: Create GitHub Release
+        id: create_release
+        run: |
+          gh release create "v${{ steps.version.outputs.version }}" \
+            --title "Release v${{ steps.version.outputs.version }}" \
+            --notes "Automated release of packet-loss-monitor v${{ steps.version.outputs.version }}" \
             --draft=false \
             --prerelease=false \
             --repo ${{ github.repository }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload artifacts
-        run: bash .github/workflows/upload-artifacts.sh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Upload Linux binary
+        run: gh release upload "v${{ steps.version.outputs.version }}" artifacts/packet_loss_monitor-linux --clobber
+
+      - name: Upload macOS binary
+        run: gh release upload "v${{ steps.version.outputs.version }}" artifacts/packet_loss_monitor-macos --clobber
+
+      - name: Upload Windows binary
+        run: gh release upload "v${{ steps.version.outputs.version }}" artifacts/packet_loss_monitor-windows.exe --clobber
+
+      - name: Verify release
+        run: |
+          gh release view "v${{ steps.version.outputs.version }}" --repo ${{ github.repository }}
