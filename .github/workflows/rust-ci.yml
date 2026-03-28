@@ -64,6 +64,7 @@ jobs:
           else
             cp target/${{ matrix.target }}/release/packet_loss_monitor output/${{ matrix.binary_name }}
           fi
+        shell: bash
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
