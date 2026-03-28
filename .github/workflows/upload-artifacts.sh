@@ -1,7 +1,6 @@
 #!/bin/bash
 set -e
-shopt -s nullglob  # Make globs expand to nothing if no matches
-shopt -u failglob  # Disable failglob to prevent errors on non-matching globs
+set +f  # Disable glob expansion to prevent errors on non-matching globs
 
 VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
 
