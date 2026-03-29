@@ -115,10 +115,15 @@ jobs:
           sudo apt update
           sudo apt install gh -y
 
-      - name: Get version from Cargo.toml
+      - name: Get version from commit message
         id: version
         run: |
-          VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/')
+          # Extract version from commit message (e.g., "Release v1.0.9" -> "1.0.9")
+          VERSION=$(echo "${{ github.event.head_commit.message }}" | grep -oP 'v\d+\.\d+\.\d+' | head -1)
+          if [ -z "$VERSION" ]; then
+            echo "Error: Could not extract version from commit message: ${{ github.event.head_commit.message }}"
+            exit 1
+          fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Release version: v$VERSION"
 
