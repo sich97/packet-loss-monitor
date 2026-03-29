@@ -118,21 +118,21 @@ jobs:
       - name: Get version from commit message
         id: version
         run: |
-          # Extract version from commit message (e.g., "Release v1.0.9" -> "1.0.9")
+          # Extract version from commit message (e.g., "Release v1.0.9" -> "v1.0.9")
           VERSION=$(echo "${{ github.event.head_commit.message }}" | grep -oP 'v\d+\.\d+\.\d+' | head -1)
           if [ -z "$VERSION" ]; then
             echo "Error: Could not extract version from commit message: ${{ github.event.head_commit.message }}"
             exit 1
           fi
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Release version: v$VERSION"
+          echo "Release version: $VERSION"
 
       - name: Create GitHub Release
         id: create_release
         run: |
-          gh release create "v${{ steps.version.outputs.version }}" \
-            --title "Release v${{ steps.version.outputs.version }}" \
-            --notes "Automated release of packet-loss-monitor v${{ steps.version.outputs.version }}" \
+          gh release create "${{ steps.version.outputs.version }}" \
+            --title "Release ${{ steps.version.outputs.version }}" \
+            --notes "Automated release of packet-loss-monitor ${{ steps.version.outputs.version }}" \
             --draft=false \
             --prerelease=false \
             --repo ${{ github.repository }}
@@ -140,22 +140,22 @@ jobs:
           GH_TOKEN: ${{ github.token }}
 
       - name: Upload Linux binary
-        run: gh release upload "v${{ steps.version.outputs.version }}" artifacts/packet_loss_monitor-linux --clobber
+        run: gh release upload "${{ steps.version.outputs.version }}" artifacts/packet_loss_monitor-linux --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Upload macOS binary
-        run: gh release upload "v${{ steps.version.outputs.version }}" artifacts/packet_loss_monitor-macos --clobber
+        run: gh release upload "${{ steps.version.outputs.version }}" artifacts/packet_loss_monitor-macos --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Upload Windows binary
-        run: gh release upload "v${{ steps.version.outputs.version }}" artifacts/packet_loss_monitor-windows.exe --clobber
+        run: gh release upload "${{ steps.version.outputs.version }}" artifacts/packet_loss_monitor-windows.exe --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
       - name: Verify release
         run: |
-          gh release view "v${{ steps.version.outputs.version }}" --repo ${{ github.repository }}
+          gh release view "${{ steps.version.outputs.version }}" --repo ${{ github.repository }}
         env:
           GH_TOKEN: ${{ github.token }}
